@@ -1,0 +1,334 @@
+{
+	"name": "copy_from_sqldb_to_adls",
+	"properties": {
+		"activities": [
+			{
+				"name": "control_tbl_data",
+				"type": "Lookup",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 1,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "AzureSqlSource",
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
+					},
+					"dataset": {
+						"referenceName": "azuresqldb_ds",
+						"type": "DatasetReference"
+					},
+					"firstRowOnly": false
+				}
+			},
+			{
+				"name": "ForEach1",
+				"type": "ForEach",
+				"dependsOn": [
+					{
+						"activity": "control_tbl_data",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@activity('control_tbl_data').output.value",
+						"type": "Expression"
+					},
+					"isSequential": true,
+					"activities": [
+						{
+							"name": "getTablename",
+							"type": "SetVariable",
+							"dependsOn": [],
+							"policy": {
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"variableName": "table_name",
+								"value": {
+									"value": "@item().table_name",
+									"type": "Expression"
+								}
+							}
+						},
+						{
+							"name": "getTableType",
+							"type": "SetVariable",
+							"dependsOn": [
+								{
+									"activity": "getTablename",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"variableName": "table_type",
+								"value": {
+									"value": "@item().table_type",
+									"type": "Expression"
+								}
+							}
+						},
+						{
+							"name": "getIncrementalcolumn",
+							"type": "SetVariable",
+							"dependsOn": [
+								{
+									"activity": "getTableType",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"variableName": "incremental_col",
+								"value": {
+									"value": "@item().incremental_col",
+									"type": "Expression"
+								}
+							}
+						},
+						{
+							"name": "getIngestionDate",
+							"type": "SetVariable",
+							"dependsOn": [
+								{
+									"activity": "getIncrementalcolumn",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"variableName": "ingestion_dt",
+								"value": {
+									"value": "@item().ingestion_dt",
+									"type": "Expression"
+								}
+							}
+						},
+						{
+							"name": "copy_sqldb_to_adls",
+							"type": "Copy",
+							"dependsOn": [
+								{
+									"activity": "If_CheckIncrementalcondition",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"source": {
+									"type": "AzureSqlSource",
+									"sqlReaderQuery": {
+										"value": "@variables('query')",
+										"type": "Expression"
+									},
+									"queryTimeout": "02:00:00",
+									"partitionOption": "None"
+								},
+								"sink": {
+									"type": "JsonSink",
+									"storeSettings": {
+										"type": "AzureBlobFSWriteSettings"
+									},
+									"formatSettings": {
+										"type": "JsonWriteSettings"
+									}
+								},
+								"enableStaging": false
+							},
+							"inputs": [
+								{
+									"referenceName": "azuresqldb_ds",
+									"type": "DatasetReference"
+								}
+							],
+							"outputs": [
+								{
+									"referenceName": "adlsjsonraw_ds",
+									"type": "DatasetReference",
+									"parameters": {
+										"foldername": {
+											"value": "@variables('table_name')",
+											"type": "Expression"
+										},
+										"filename": {
+											"value": "@variables('filename')",
+											"type": "Expression"
+										}
+									}
+								}
+							]
+						},
+						{
+							"name": "If_CheckIncrementalcondition",
+							"type": "IfCondition",
+							"dependsOn": [
+								{
+									"activity": "getIngestionDate",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"userProperties": [],
+							"typeProperties": {
+								"expression": {
+									"value": "@equals(variables('table_type'),'fullsync' )",
+									"type": "Expression"
+								},
+								"ifFalseActivities": [
+									{
+										"name": "getQuery",
+										"type": "SetVariable",
+										"dependsOn": [],
+										"policy": {
+											"secureOutput": false,
+											"secureInput": false
+										},
+										"userProperties": [],
+										"typeProperties": {
+											"variableName": "query",
+											"value": {
+												"value": "@concat('select * from ', variables('table_name'), ' where ',\nvariables('incremental_col'),' = ' , '''',variables('ingestion_dt'),'''' )",
+												"type": "Expression"
+											}
+										}
+									},
+									{
+										"name": "getFilename",
+										"type": "SetVariable",
+										"dependsOn": [
+											{
+												"activity": "getQuery",
+												"dependencyConditions": [
+													"Succeeded"
+												]
+											}
+										],
+										"policy": {
+											"secureOutput": false,
+											"secureInput": false
+										},
+										"userProperties": [],
+										"typeProperties": {
+											"variableName": "filename",
+											"value": {
+												"value": "@concat(variables('table_name'),'_',formatDateTime(variables('ingestion_dt'),'ddMMyyyy'),'.json')",
+												"type": "Expression"
+											}
+										}
+									}
+								],
+								"ifTrueActivities": [
+									{
+										"name": "getfullsyncQuery",
+										"type": "SetVariable",
+										"dependsOn": [],
+										"policy": {
+											"secureOutput": false,
+											"secureInput": false
+										},
+										"userProperties": [],
+										"typeProperties": {
+											"variableName": "query",
+											"value": {
+												"value": "@concat(\n    'select * from ',variables('table_name')\n)",
+												"type": "Expression"
+											}
+										}
+									},
+									{
+										"name": "getfullsyncFilename",
+										"type": "SetVariable",
+										"dependsOn": [
+											{
+												"activity": "getfullsyncQuery",
+												"dependencyConditions": [
+													"Succeeded"
+												]
+											}
+										],
+										"policy": {
+											"secureOutput": false,
+											"secureInput": false
+										},
+										"userProperties": [],
+										"typeProperties": {
+											"variableName": "filename",
+											"value": {
+												"value": "@concat(variables('table_name'),'.json')",
+												"type": "Expression"
+											}
+										}
+									}
+								]
+							}
+						}
+					]
+				}
+			}
+		],
+		"variables": {
+			"table_name": {
+				"type": "String"
+			},
+			"table_type": {
+				"type": "String"
+			},
+			"incremental_col": {
+				"type": "String"
+			},
+			"ingestion_dt": {
+				"type": "String"
+			},
+			"query": {
+				"type": "String"
+			},
+			"filename": {
+				"type": "String"
+			}
+		},
+		"annotations": [],
+		"lastPublishTime": "2025-09-25T15:52:25Z"
+	},
+	"type": "Microsoft.DataFactory/factories/pipelines"
+}

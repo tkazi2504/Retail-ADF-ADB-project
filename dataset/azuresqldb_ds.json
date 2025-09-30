@@ -1,0 +1,38 @@
+{
+	"name": "azuresqldb_ds",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "azuresqldb_ls",
+			"type": "LinkedServiceReference"
+		},
+		"annotations": [],
+		"type": "AzureSqlTable",
+		"schema": [
+			{
+				"name": "table_name",
+				"type": "varchar"
+			},
+			{
+				"name": "source_name",
+				"type": "varchar"
+			},
+			{
+				"name": "table_type",
+				"type": "varchar"
+			},
+			{
+				"name": "incremental_col",
+				"type": "varchar"
+			},
+			{
+				"name": "ingestion_dt",
+				"type": "varchar"
+			}
+		],
+		"typeProperties": {
+			"schema": "dbo",
+			"table": "cntrl_tbl"
+		}
+	},
+	"type": "Microsoft.DataFactory/factories/datasets"
+}

@@ -1,0 +1,9 @@
+{
+	"name": "adfretailprojtk",
+	"location": "centralindia",
+	"identity": {
+		"type": "SystemAssigned",
+		"principalId": "9972be45-4b18-459d-8875-c84cab49e345",
+		"tenantId": "dd19ba0d-786e-4aef-8bb3-c21503f6ec36"
+	}
+}
